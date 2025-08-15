@@ -12,19 +12,18 @@ import ComparativoPrecios from './components/modules/ComparativoPrecios';
 function normalizeLista(l: any): ListaPrecios | null {
   if (!l) return null;
 
-  const arr = (v: unknown) => (Array.isArray(v) ? v as any[] : []);
+  const arr = (v: unknown) => (Array.isArray(v) ? (v as any[]) : []);
 
-  // cubrimos nombres que suelen usar los módulos
-  const items        = arr(l.items);
-  const itemsLinea   = arr(l.itemsLinea   ?? l.articulosLinea ?? l.linea      ?? l.lineItems);
-  const itemsMallas  = arr(l.itemsMallas  ?? l.articulosMallas?? l.mallas     ?? l.meshItems);
+  // Unificamos nombres: muchos módulos usan "articulos"
+  const articulos = arr(l.articulos ?? l.items ?? l.itemsLinea);
 
   return {
     ...l,
-    items,
-    itemsLinea,
-    itemsMallas,
-  } as unknown as ListaPrecios;
+    articulos,          // <- siempre array
+    items: articulos,   // <- alias para quienes usan "items"
+    itemsLinea:  arr(l.itemsLinea),
+    itemsMallas: arr(l.itemsMallas),
+  } as ListaPrecios;
 }
 
 function App() {
