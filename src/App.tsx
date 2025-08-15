@@ -8,109 +8,117 @@ import ConsultaPrecios from './components/modules/ConsultaPrecios';
 import ListaMayoristas from './components/modules/ListaMayoristas';
 import ComparativoPrecios from './components/modules/ComparativoPrecios';
 
+/** Normaliza una lista para garantizar items: [] y evitar TypeError en el render */
+function normalizeLista(l: any): ListaPrecios | null {
+  if (!l) return null;
+  const items = Array.isArray(l.items) ? l.items : [];
+  return { ...l, items } as ListaPrecios;
+}
+
 function App() {
-  const [activeModule, setActiveModule] = useState('inicio');
+  const [activeModule, setActiveModule] = useState<
+    'inicio' | 'consulta' | 'mayoristas' | 'comparativo' | 'descuentos'
+  >('inicio');
 
   // Estados persistentes
   const [listaActual, setListaActual] = useLocalStorage<ListaPrecios | null>('listaActual', null);
   const [listasAnteriores, setListasAnteriores] = useLocalStorage<ListaPrecios[]>('listasAnteriores', []);
   const [descuentos, setDescuentos] = useLocalStorage<DescuentosImpuestos>('descuentos', {
-    iva: 21.00,
-    descuento1Eseka: 15.00,
-    descuento2Catalogo: 25.00,
-    descuento3Mayorista: 35.00
+    iva: 21.0,
+    descuento1Eseka: 15.0,
+    descuento2Catalogo: 25.0,
+    descuento3Mayorista: 35.0,
   });
 
-    // Intentar cargar listas desde el backend (Netlify Functions + Blobs)
+  // Intentar cargar listas desde el backend (Netlify Functions)
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('/.netlify/functions/get-lists');
-        if (res.ok) {
-          const { latest, anteriores } = await res.json();
-          if (latest) {
-            setListaActual(latest);
-            if (Array.isArray(anteriores)) {
-              setListasAnteriores(anteriores.filter(Boolean));
-            }
-            return; // Ya cargamos desde backend
-          }
+        if (!res.ok) {
+          console.warn('get-lists respondió', res.status);
+          return;
         }
-      } catch (e) {
-        console.warn('Backend no disponible, usando listas.json', e);
-      }
-      // Fallback a /listas.json si no hay backend o no hay listas guardadas
-      if (!listaActual) {
-        fetch('/listas.json')
-          .then(res => res.json())
-          .then((data: ListaPrecios) => setListaActual(data))
-          .catch(err => console.error('Error cargando listas.json', err));
+
+        const data = (await res.json()) as {
+          latest?: ListaPrecios | null;
+          anteriores?: ListaPrecios[] | null;
+        };
+
+        // Normalización defensiva
+        const latestN = normalizeLista(data?.latest ?? null);
+        const anterioresN = Array.isArray(data?.anteriores)
+          ? (data.anteriores.map(normalizeLista).filter(Boolean) as ListaPrecios[])
+          : [];
+
+        if (latestN) setListaActual(latestN);
+        setListasAnteriores(anterioresN);
+      } catch (err) {
+        console.error('Error cargando listas desde función get-lists', err);
       }
     })();
+    // solo al montar
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
-  const handleListaActualizada = (nuevaLista: ListaPrecios) => {
+  // Handlers
+  const handleListaActualizada = (nueva: ListaPrecios) => {
     if (listaActual) {
-      setListasAnteriores(prev => [listaActual, ...prev].slice(0, 10)); // Mantener solo las últimas 10
+      const prevNorm = normalizeLista(listaActual)!;
+      setListasAnteriores((prev) => [prevNorm, ...(prev ?? [])]);
     }
-    setListaActual(nuevaLista);
+    setListaActual(normalizeLista(nueva));
   };
 
+  const handleDescuentosActualizados = (nuevos: DescuentosImpuestos) => {
+    setDescuentos(nuevos);
+  };
+
+  // Derivados SEGUROS para pasar a niños (evita .length de undefined)
+  const listaActualSafe =
+    normalizeLista(listaActual) ?? ({ items: [] } as unknown as ListaPrecios);
+
+  const listasAnterioresSafe: ListaPrecios[] = Array.isArray(listasAnteriores)
+    ? (listasAnteriores.map(normalizeLista).filter(Boolean) as ListaPrecios[])
+    : [];
+
+  // Render del módulo activo
   const renderActiveModule = () => {
     switch (activeModule) {
       case 'inicio':
         return (
-          <Inicio 
+          <Inicio
+            listaActual={listaActualSafe}
             onListaActualizada={handleListaActualizada}
-            listaActual={listaActual}
           />
         );
       case 'descuentos':
         return (
-          <DescuentosImpuestosModule 
+          <DescuentosImpuestosModule
             descuentos={descuentos}
-            onDescuentosChange={setDescuentos}
+            onChange={handleDescuentosActualizados}
           />
         );
       case 'consulta':
         return (
-          <ConsultaPrecios 
-            listaActual={listaActual}
+          <ConsultaPrecios
+            listaActual={listaActualSafe}
             descuentos={descuentos}
           />
         );
       case 'mayoristas':
         return (
-          <ListaMayoristas 
-            listaActual={listaActual}
+          <ListaMayoristas
+            listaActual={listaActualSafe}
             descuentos={descuentos}
           />
         );
       case 'comparativo':
         return (
-          <ComparativoPrecios 
-            listaActual={listaActual}
-            listasAnteriores={listasAnteriores}
+          <ComparativoPrecios
+            listaActual={listaActualSafe}
+            listasAnteriores={listasAnterioresSafe}
           />
-        );
-      case 'mallas':
-        const listaMallas = listaActual?.tipo === 'mallas' ? listaActual : null;
-        const listasAnterioresMallas = listasAnteriores.filter(l => l.tipo === 'mallas');
-
-        return (
-          <div className="space-y-8">
-            <div className="text-center bg-purple-50 border border-purple-200 rounded-lg p-6">
-              <h2 className="text-3xl font-bold text-purple-900 mb-2">Módulo Mallas</h2>
-              <p className="text-lg text-purple-700">
-                Gestión específica para artículos de mallas con las mismas funcionalidades
-              </p>
-            </div>
-            <ConsultaPrecios 
-              listaActual={listaMallas}
-              descuentos={descuentos}
-            />
-          </div>
         );
       default:
         return <div>Módulo no encontrado</div>;
@@ -119,10 +127,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NavBar 
-        activeModule={activeModule} 
-        onModuleChange={setActiveModule} 
-      />
+      <NavBar activeModule={activeModule} onModuleChange={setActiveModule} />
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {renderActiveModule()}
       </main>
