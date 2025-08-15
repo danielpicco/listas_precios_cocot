@@ -11,8 +11,20 @@ import ComparativoPrecios from './components/modules/ComparativoPrecios';
 /** Normaliza una lista para garantizar items: [] y evitar TypeError en el render */
 function normalizeLista(l: any): ListaPrecios | null {
   if (!l) return null;
-  const items = Array.isArray(l.items) ? l.items : [];
-  return { ...l, items } as ListaPrecios;
+
+  const arr = (v: unknown) => (Array.isArray(v) ? v as any[] : []);
+
+  // cubrimos nombres que suelen usar los módulos
+  const items        = arr(l.items);
+  const itemsLinea   = arr(l.itemsLinea   ?? l.articulosLinea ?? l.linea      ?? l.lineItems);
+  const itemsMallas  = arr(l.itemsMallas  ?? l.articulosMallas?? l.mallas     ?? l.meshItems);
+
+  return {
+    ...l,
+    items,
+    itemsLinea,
+    itemsMallas,
+  } as unknown as ListaPrecios;
 }
 
 function App() {
