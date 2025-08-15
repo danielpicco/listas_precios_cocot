@@ -1,0 +1,29 @@
+{
+  "nombre": "Lista Mayoristas Julio 2025",
+  "fecha": "2025-07-15",
+  "tipo": "mayoristas",
+  "articulos": [
+    {
+      "codigo": "ART001",
+      "descripcion": "Zapatillas Urbanas",
+      "origen": "Argentina",
+      "sugerido": 12999,
+      "unidad": {
+        "precioBase": 11000,
+        "costoFabrica": 9500,
+        "iva": 21
+      }
+    },
+    {
+      "codigo": "ART002",
+      "descripcion": "Remera Técnica",
+      "origen": "Brasil",
+      "sugerido": 7999,
+      "unidad": {
+        "precioBase": 6800,
+        "costoFabrica": 6000,
+        "iva": 21
+      }
+    }
+  ]
+}
