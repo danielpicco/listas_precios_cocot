@@ -3,6 +3,7 @@ import { ListaPrecios, ComparativoItem } from '../../types';
 import { exportarAExcel } from '../../utils/excel';
 import { formatearPrecio, formatearPorcentaje } from '../../utils/calculations';
 import { Download, TrendingUp, TrendingDown, Minus, BarChart3, ArrowUpDown } from 'lucide-react';
+import { safeArr } from '../../../utils/safe';
 
 interface ComparativoPreciosProps {
   listaActual: ListaPrecios | null;

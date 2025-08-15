@@ -21,17 +21,34 @@ function App() {
     descuento3Mayorista: 35.00
   });
 
-  // Cargar listas.json automáticamente si no hay una lista activa
+    // Intentar cargar listas desde el backend (Netlify Functions + Blobs)
   useEffect(() => {
-    if (!listaActual) {
-      fetch('/listas.json')
-        .then(res => res.json())
-        .then((data: ListaPrecios) => {
-          setListaActual(data);
-        })
-        .catch(err => console.error('Error cargando listas.json', err));
-    }
+    (async () => {
+      try {
+        const res = await fetch('/.netlify/functions/get-lists');
+        if (res.ok) {
+          const { latest, anteriores } = await res.json();
+          if (latest) {
+            setListaActual(latest);
+            if (Array.isArray(anteriores)) {
+              setListasAnteriores(anteriores.filter(Boolean));
+            }
+            return; // Ya cargamos desde backend
+          }
+        }
+      } catch (e) {
+        console.warn('Backend no disponible, usando listas.json', e);
+      }
+      // Fallback a /listas.json si no hay backend o no hay listas guardadas
+      if (!listaActual) {
+        fetch('/listas.json')
+          .then(res => res.json())
+          .then((data: ListaPrecios) => setListaActual(data))
+          .catch(err => console.error('Error cargando listas.json', err));
+      }
+    })();
   }, []);
+
 
   const handleListaActualizada = (nuevaLista: ListaPrecios) => {
     if (listaActual) {
