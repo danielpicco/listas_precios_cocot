@@ -1,49 +1,23 @@
 import { Handler } from '@netlify/functions';
-import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL!;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const GH_TOKEN = process.env.GITHUB_TOKEN!;
+const GH_REPO  = process.env.GITHUB_REPO!;
+const GH_BRANCH= process.env.GITHUB_BRANCH || 'main';
+const GH_PATH  = process.env.GITHUB_PATH || 'data/price_lists.json';
 
-const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-export const handler: Handler = async (event) => {
+export const handler: Handler = async () => {
   try {
-    if (event.httpMethod !== 'GET') {
-      return { statusCode: 405, body: 'Method Not Allowed' };
-    }
-
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-      return { statusCode: 500, body: 'Supabase env vars missing (URL or SERVICE_ROLE_KEY).' };
-    }
-
-    const params = event.queryStringParameters || {};
-    const usuario_id = params.usuario_id || null;
-
-    let query = sb
-      .from('price_lists')
-      .select('id,nombre,vigente_desde,creado_en,origen,items,usuario_id')
-      .order('vigente_desde', { ascending: false })
-      .order('creado_en', { ascending: false });
-
-    if (usuario_id) {
-      query = query.eq('usuario_id', usuario_id);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Supabase select error:', error);
-      return { statusCode: 500, body: `DB error: ${error.message}` };
-    }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ listas: data ?? [] }),
-      headers: { 'Content-Type': 'application/json' }
-    };
-  } catch (err: any) {
-    console.error('get-lists fatal:', err);
-    return { statusCode: 500, body: `Fatal: ${err.message || String(err)}` };
+    const res = await fetch(`https://api.github.com/repos/${GH_REPO}/contents/${GH_PATH}?ref=${GH_BRANCH}`, {
+      headers: { Authorization: `Bearer ${GH_TOKEN}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if (res.status === 404) return { statusCode: 200, body: JSON.stringify({ listas: [] }) };
+    if (!res.ok) throw new Error(`GitHub GET failed: ${res.status} ${await res.text()}`);
+    const json = await res.json();
+    const content = Buffer.from(json.content, 'base64').toString('utf8');
+    const data = JSON.parse(content || '{"listas":[]}');
+    return { statusCode: 200, body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } };
+  } catch (e: any) {
+    return { statusCode: 500, body: `Error: ${e.message}` };
   }
 };
 export default {};
