@@ -1,70 +1,76 @@
-import type { Handler } from '@netlify/functions';
+import { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!; // server-side only
 
-function chunk<T>(arr: T[], size = 1000): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
+const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
-
   try {
-    // Espera: { nombre, origen, vigenteDesde, items:[{codigo, descripcion, color, alto, unidad, sugerido}, ...] }
-    const body = JSON.parse(event.body || '{}');
-
-    const nombre: string = body?.nombre || body?.lista?.nombre || 'lista';
-    const origen: string = body?.origen || body?.lista?.origen || null;
-    const vigenteDesde: string =
-      body?.vigenteDesde || body?.lista?.vigenteDesde || new Date().toISOString().slice(0,10);
-    const items: any[] = body?.items || body?.lista?.items || [];
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return { statusCode: 400, body: 'Faltan items para la lista' };
+    if (event.httpMethod !== 'POST') {
+      return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    const { data: listaIns, error: errLista } = await supabase
-      .from('listas')
-      .insert({ nombre, origen, vigente_desde: vigenteDesde })
-      .select('id, nombre, vigente_desde')
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      return { statusCode: 500, body: 'Supabase env vars missing (URL or SERVICE_ROLE_KEY).' };
+    }
+
+    const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
+    if (!contentType.includes('application/json')) {
+      return { statusCode: 400, body: 'Content-Type must be application/json' };
+    }
+
+    // Payload esperado:
+    // {
+    //   "nombre": "Migración inicial",
+    //   "vigente_desde": "2025-08-14",
+    //   "origen": "Resumen Listas 2025-08.xlsx",
+    //   "items": [ { "codigo":"A001", "descripcion":"...", "color":"...", "talle":"...", "unidad":1, "sugerido":3500.5 } ],
+    //   "usuario_id": "opcional"
+    // }
+    const payload = JSON.parse(event.body || '{}');
+
+    if (!payload?.nombre || !payload?.vigente_desde || !Array.isArray(payload?.items)) {
+      return { statusCode: 400, body: 'Faltan campos: nombre, vigente_desde, items[]' };
+    }
+
+    const itemsLimpios = (payload.items as any[])
+      .filter(r => r?.codigo && String(r.codigo).trim() !== '')
+      .map(r => {
+        const unidad = r.unidad ?? r.unitario ?? null;
+        const obj = { ...r, unidad };
+        delete (obj as any).unitario;
+        return obj;
+      });
+
+    const row = {
+      nombre: String(payload.nombre).trim(),
+      vigente_desde: payload.vigente_desde,
+      origen: payload.origen ?? null,
+      items: itemsLimpios,
+      usuario_id: payload.usuario_id ?? null
+    };
+
+    const { data, error } = await sb
+      .from('price_lists')
+      .upsert(row, { onConflict: 'nombre,vigente_desde' })
+      .select()
       .single();
 
-    if (errLista || !listaIns) {
-      return { statusCode: 500, body: 'Error creando cabecera: ' + (errLista?.message || 'desconocido') };
-    }
-
-    const lista_id = listaIns.id as number;
-
-    const rows = items.map(it => ({
-      lista_id,
-      codigo: String(it.codigo ?? ''),
-      descripcion: String(it.descripcion ?? ''),
-      color: it.color ?? null,
-      alto: it.alto ?? null,
-      unidad: it.unidad != null ? Number(it.unidad) : null,
-      sugerido: it.sugerido != null ? Number(it.sugerido) : null,
-    }));
-
-    for (const part of chunk(rows, 1000)) {
-      const { error } = await supabase.from('precios').insert(part);
-      if (error) {
-        await supabase.from('listas').delete().eq('id', lista_id); // rollback simple
-        return { statusCode: 500, body: 'Error insertando precios: ' + error.message };
-      }
+    if (error) {
+      console.error('Supabase upsert error:', error);
+      return { statusCode: 500, body: `DB error: ${error.message}` };
     }
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, lista_id, nombre, vigente_desde: listaIns.vigente_desde })
+      body: JSON.stringify({ ok: true, id: (data as any).id }),
+      headers: { 'Content-Type': 'application/json' }
     };
-  } catch (e:any) {
-    return { statusCode: 500, body: 'Error upload-list: ' + (e?.message || String(e)) };
+  } catch (err: any) {
+    console.error('upload-list fatal:', err);
+    return { statusCode: 500, body: `Fatal: ${err.message || String(err)}` };
   }
 };
+export default {}; // hace feliz a esbuild

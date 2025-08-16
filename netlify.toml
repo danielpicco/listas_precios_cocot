@@ -1,8 +1,9 @@
 [build]
-  command = "npm run build"
-  publish = "dist"
   functions = "netlify/functions"
+  command = ""
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@supabase/supabase-js"]
+
+[context.production]
+  environment = { ENVIRONMENT = "production" }
