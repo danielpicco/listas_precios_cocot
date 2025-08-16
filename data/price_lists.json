@@ -1,0 +1,20 @@
+{
+  "listas": [
+    {
+      "id": "Migración inicial__2025-08-14",
+      "nombre": "Migración inicial",
+      "vigente_desde": "2025-08-14",
+      "origen": "Resumen Listas 2025-08.xlsx",
+      "creado_en": "2025-08-16T02:37:13.704Z",
+      "items": [
+        {
+          "codigo": "A001",
+          "descripcion": "Remera deportiva",
+          "color": "Azul",
+          "unidad": 1,
+          "sugerido": 3500.5
+        }
+      ]
+    }
+  ]
+}
