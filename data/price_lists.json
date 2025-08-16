@@ -1,21 +1,6 @@
 {
   "listas": [
     {
-      "id": "Lista temporal__2025-08-16",
-      "nombre": "Lista temporal",
-      "vigente_desde": "2025-08-16",
-      "origen": "test",
-      "creado_en": "2025-08-16T15:44:34.188Z",
-      "items": [
-        {
-          "codigo": "T001",
-          "descripcion": "Item temporal",
-          "unidad": 1,
-          "sugerido": 100
-        }
-      ]
-    },
-    {
       "id": "Migración inicial__2025-08-14",
       "nombre": "Migración inicial",
       "vigente_desde": "2025-08-14",
